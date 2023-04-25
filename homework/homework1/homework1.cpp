@@ -113,8 +113,44 @@ VulkanglTFModel::~VulkanglTFModel()
 			}
 		}
 	}
+	//glTF nodes loading helper function
+	//rewrite node loader,simplify logic
+	//Search node from parent to children by index
+	VulkanglTFModel::Node* VulkanglTFModel::findNode(Node* parent, uint32_t index)
+	{
+		Node* nodeFound = nullptr;
+		if (parent->index == index)
+		{
+			return parent;
+		}
+		for (auto &child : parent->children)
+		{
+			nodeFound = findNode(child, index);
+			if (nodeFound)
+			{
+				break;
+			}
+		}
+		return nodeFound;
+}	//iterate vector of nodes to check weather nodes exist or not
+	VulkanglTFModel::Node* VulkanglTFModel::nodeFromIndex(uint32_t index)
+	{
+		Node* nodeFound = nullptr;
+		for (auto& node : nodes)
+		{
+			nodeFound = findNode(node, index);
+			if (nodeFound)
+			{
+				break;
+			}
+		}
+		return nodeFound;
+	}
+	// load skin from glTF model
+	void VulkanglTFModel::loadSkins(tinygltf::Model& input)
+	{
 
-	
+	}
 
 	/*
 		glTF rendering functions

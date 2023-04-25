@@ -173,7 +173,7 @@ public:
 	Node* nodeFromIndex(uint32_t index);
 	void      loadSkins(tinygltf::Model& input);
 	void      loadAnimations(tinygltf::Model& input);
-	void      loadNode(const tinygltf::Node& inputNode, const tinygltf::Model& input, VulkanglTFModel::Node* parent, std::vector<uint32_t>& indexBuffer, std::vector<VulkanglTFModel::Vertex>& vertexBuffer);
+	void      loadNode(const tinygltf::Node& inputNode, const tinygltf::Model& input, VulkanglTFModel::Node* parent, uint32_t nodeIndex, std::vector<uint32_t>& indexBuffer, std::vector<VulkanglTFModel::Vertex>& vertexBuffer);
 	glm::mat4 getNodeMatrix(VulkanglTFModel::Node* node);
 	void      updateJoints(VulkanglTFModel::Node* node);
 	void      updateAnimation(float deltaTime);
