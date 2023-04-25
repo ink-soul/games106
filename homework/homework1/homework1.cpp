@@ -17,106 +17,15 @@
  * If you are looking for a complete glTF implementation, check out https://github.com/SaschaWillems/Vulkan-glTF-PBR/
  */
 
-#define TINYGLTF_IMPLEMENTATION
-#define STB_IMAGE_IMPLEMENTATION
-#define TINYGLTF_NO_STB_IMAGE_WRITE
-#ifdef VK_USE_PLATFORM_ANDROID_KHR
-#define TINYGLTF_ANDROID_LOAD_FROM_ASSETS
-#endif
-#include "tiny_gltf.h"
 
-#include "vulkanexamplebase.h"
+#include "homework1.h"
 
-#define ENABLE_VALIDATION false
-
-// Contains everything required to render a glTF model in Vulkan
-// This class is heavily simplified (compared to glTF's feature set) but retains the basic glTF structure
-class VulkanglTFModel
+glm::mat4 VulkanglTFModel::Node::getLocalMatrix()
 {
-public:
-	// The class requires some Vulkan objects so it can create it's own resources
-	vks::VulkanDevice* vulkanDevice;
-	VkQueue copyQueue;
+	return glm::translate(glm::mat4(1.0f), translation) * glm::mat4(rotation) * glm::scale(glm::mat4(1.0f), scale) * matrix;
+}
 
-	// The vertex layout for the samples' model
-	struct Vertex {
-		glm::vec3 pos;
-		glm::vec3 normal;
-		glm::vec2 uv;
-		glm::vec3 color;
-	};
-
-	// Single vertex buffer for all primitives
-	struct {
-		VkBuffer buffer;
-		VkDeviceMemory memory;
-	} vertices;
-
-	// Single index buffer for all primitives
-	struct {
-		int count;
-		VkBuffer buffer;
-		VkDeviceMemory memory;
-	} indices;
-
-	// The following structures roughly represent the glTF scene structure
-	// To keep things simple, they only contain those properties that are required for this sample
-	struct Node;
-
-	// A primitive contains the data for a single draw call
-	struct Primitive {
-		uint32_t firstIndex;
-		uint32_t indexCount;
-		int32_t materialIndex;
-	};
-
-	// Contains the node's (optional) geometry and can be made up of an arbitrary number of primitives
-	struct Mesh {
-		std::vector<Primitive> primitives;
-	};
-
-	// A node represents an object in the glTF scene graph
-	struct Node {
-		Node* parent;
-		std::vector<Node*> children;
-		Mesh mesh;
-		glm::mat4 matrix;
-		~Node() {
-			for (auto& child : children) {
-				delete child;
-			}
-		}
-	};
-
-	// A glTF material stores information in e.g. the texture that is attached to it and colors
-	struct Material {
-		glm::vec4 baseColorFactor = glm::vec4(1.0f);
-		uint32_t baseColorTextureIndex;
-	};
-
-	// Contains the texture for a single glTF image
-	// Images may be reused by texture objects and are as such separated
-	struct Image {
-		vks::Texture2D texture;
-		// We also store (and create) a descriptor set that's used to access this texture from the fragment shader
-		VkDescriptorSet descriptorSet;
-	};
-
-	// A glTF texture stores a reference to the image and a sampler
-	// In this sample, we are only interested in the image
-	struct Texture {
-		int32_t imageIndex;
-	};
-
-	/*
-		Model data
-	*/
-	std::vector<Image> images;
-	std::vector<Texture> textures;
-	std::vector<Material> materials;
-	std::vector<Node*> nodes;
-
-	~VulkanglTFModel()
+VulkanglTFModel::~VulkanglTFModel()
 	{
 		for (auto node : nodes) {
 			delete node;
@@ -132,6 +41,10 @@ public:
 			vkDestroySampler(vulkanDevice->logicalDevice, image.texture.sampler, nullptr);
 			vkFreeMemory(vulkanDevice->logicalDevice, image.texture.deviceMemory, nullptr);
 		}
+		for (Skin skin : skins)
+		{
+			skin.ssbo.destroy();
+		}
 	}
 
 	/*
@@ -140,7 +53,7 @@ public:
 		The following functions take a glTF input model loaded via tinyglTF and convert all required data into our own structure
 	*/
 
-	void loadImages(tinygltf::Model& input)
+	void VulkanglTFModel::loadImages(tinygltf::Model& input)
 	{
 		// Images can be stored inside the glTF (which is the case for the sample model), so instead of directly
 		// loading them from disk, we fetch them from the glTF loader and upload the buffers
@@ -176,7 +89,7 @@ public:
 		}
 	}
 
-	void loadTextures(tinygltf::Model& input)
+	void VulkanglTFModel::loadTextures(tinygltf::Model& input)
 	{
 		textures.resize(input.textures.size());
 		for (size_t i = 0; i < input.textures.size(); i++) {
@@ -184,7 +97,7 @@ public:
 		}
 	}
 
-	void loadMaterials(tinygltf::Model& input)
+	void VulkanglTFModel::loadMaterials(tinygltf::Model& input)
 	{
 		materials.resize(input.materials.size());
 		for (size_t i = 0; i < input.materials.size(); i++) {
@@ -201,7 +114,7 @@ public:
 		}
 	}
 
-	void loadNode(const tinygltf::Node& inputNode, const tinygltf::Model& input, VulkanglTFModel::Node* parent, std::vector<uint32_t>& indexBuffer, std::vector<VulkanglTFModel::Vertex>& vertexBuffer)
+	void VulkanglTFModel::loadNode(const tinygltf::Node& inputNode, const tinygltf::Model& input, VulkanglTFModel::Node* parent, std::vector<uint32_t>& indexBuffer, std::vector<VulkanglTFModel::Vertex>& vertexBuffer)
 	{
 		VulkanglTFModel::Node* node = new VulkanglTFModel::Node{};
 		node->matrix = glm::mat4(1.0f);
@@ -335,7 +248,7 @@ public:
 	*/
 
 	// Draw a single node including child nodes (if present)
-	void drawNode(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, VulkanglTFModel::Node* node)
+	void VulkanglTFModel::drawNode(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, VulkanglTFModel::Node* node)
 	{
 		if (node->mesh.primitives.size() > 0) {
 			// Pass the node's matrix via push constants
@@ -364,7 +277,7 @@ public:
 	}
 
 	// Draw the glTF scene starting at the top-level-nodes
-	void draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout)
+	void VulkanglTFModel::draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout)
 	{
 		// All vertices and indices are stored in single buffers, so we only need to bind once
 		VkDeviceSize offsets[1] = { 0 };
@@ -376,39 +289,11 @@ public:
 		}
 	}
 
-};
 
-class VulkanExample : public VulkanExampleBase
-{
-public:
-	bool wireframe = false;
 
-	VulkanglTFModel glTFModel;
 
-	struct ShaderData {
-		vks::Buffer buffer;
-		struct Values {
-			glm::mat4 projection;
-			glm::mat4 model;
-			glm::vec4 lightPos = glm::vec4(5.0f, 5.0f, -5.0f, 1.0f);
-			glm::vec4 viewPos;
-		} values;
-	} shaderData;
-
-	struct Pipelines {
-		VkPipeline solid;
-		VkPipeline wireframe = VK_NULL_HANDLE;
-	} pipelines;
-
-	VkPipelineLayout pipelineLayout;
-	VkDescriptorSet descriptorSet;
-
-	struct DescriptorSetLayouts {
-		VkDescriptorSetLayout matrices;
-		VkDescriptorSetLayout textures;
-	} descriptorSetLayouts;
-
-	VulkanExample() : VulkanExampleBase(ENABLE_VALIDATION)
+VulkanExample::VulkanExample():
+	VulkanExampleBase(ENABLE_VALIDATION)
 	{
 		title = "homework1";
 		camera.type = Camera::CameraType::lookat;
@@ -418,7 +303,7 @@ public:
 		camera.setPerspective(60.0f, (float)width / (float)height, 0.1f, 256.0f);
 	}
 
-	~VulkanExample()
+VulkanExample::~VulkanExample()
 	{
 		// Clean up used Vulkan resources
 		// Note : Inherited destructor cleans up resources stored in base class
@@ -434,15 +319,15 @@ public:
 		shaderData.buffer.destroy();
 	}
 
-	virtual void getEnabledFeatures()
-	{
-		// Fill mode non solid is required for wireframe display
-		if (deviceFeatures.fillModeNonSolid) {
-			enabledFeatures.fillModeNonSolid = VK_TRUE;
-		};
-	}
+void VulkanExample::getEnabledFeatures()
+{
+	// Fill mode non solid is required for wireframe display
+	if (deviceFeatures.fillModeNonSolid) {
+		enabledFeatures.fillModeNonSolid = VK_TRUE;
+	};
+}
 
-	void buildCommandBuffers()
+	void VulkanExample::buildCommandBuffers()
 	{
 		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 
@@ -480,7 +365,7 @@ public:
 		}
 	}
 
-	void loadglTFFile(std::string filename)
+	void VulkanExample::loadglTFFile(std::string filename)
 	{
 		tinygltf::Model glTFInput;
 		tinygltf::TinyGLTF gltfContext;
@@ -590,12 +475,12 @@ public:
 		vkFreeMemory(device, indexStaging.memory, nullptr);
 	}
 
-	void loadAssets()
+	void VulkanExample::loadAssets()
 	{
 		loadglTFFile(getAssetPath() + "buster_drone/busterDrone.gltf");
 	}
 
-	void setupDescriptors()
+	void VulkanExample::setupDescriptors()
 	{
 		/*
 			This sample uses separate descriptor sets (and layouts) for the matrices and materials (textures)
@@ -642,7 +527,7 @@ public:
 		}
 	}
 
-	void preparePipelines()
+	void VulkanExample::preparePipelines()
 	{
 		VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCI = vks::initializers::pipelineInputAssemblyStateCreateInfo(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0, VK_FALSE);
 		VkPipelineRasterizationStateCreateInfo rasterizationStateCI = vks::initializers::pipelineRasterizationStateCreateInfo(VK_POLYGON_MODE_FILL, VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE, 0);
@@ -698,7 +583,7 @@ public:
 	}
 
 	// Prepare and initialize uniform buffer containing shader uniforms
-	void prepareUniformBuffers()
+	void VulkanExample::prepareUniformBuffers()
 	{
 		// Vertex shader uniform buffer block
 		VK_CHECK_RESULT(vulkanDevice->createBuffer(
@@ -713,7 +598,7 @@ public:
 		updateUniformBuffers();
 	}
 
-	void updateUniformBuffers()
+	void VulkanExample::updateUniformBuffers()
 	{
 		shaderData.values.projection = camera.matrices.perspective;
 		shaderData.values.model = camera.matrices.view;
@@ -721,7 +606,7 @@ public:
 		memcpy(shaderData.buffer.mapped, &shaderData.values, sizeof(shaderData.values));
 	}
 
-	void prepare()
+	void VulkanExample::prepare()
 	{
 		VulkanExampleBase::prepare();
 		loadAssets();
@@ -732,7 +617,7 @@ public:
 		prepared = true;
 	}
 
-	virtual void render()
+	void VulkanExample::render()
 	{
 		renderFrame();
 		if (camera.updated) {
@@ -740,12 +625,12 @@ public:
 		}
 	}
 
-	virtual void viewChanged()
+	void VulkanExample::viewChanged()
 	{
 		updateUniformBuffers();
 	}
 
-	virtual void OnUpdateUIOverlay(vks::UIOverlay *overlay)
+	void VulkanExample::OnUpdateUIOverlay(vks::UIOverlay *overlay)
 	{
 		if (overlay->header("Settings")) {
 			if (overlay->checkBox("Wireframe", &wireframe)) {
@@ -753,6 +638,6 @@ public:
 			}
 		}
 	}
-};
+
 
 VULKAN_EXAMPLE_MAIN()
