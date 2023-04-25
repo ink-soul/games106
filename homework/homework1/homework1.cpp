@@ -146,10 +146,46 @@ VulkanglTFModel::~VulkanglTFModel()
 		}
 		return nodeFound;
 	}
-	// load skin from glTF model
+	// load skins from glTF model
 	void VulkanglTFModel::loadSkins(tinygltf::Model& input)
 	{
+		skins.resize(input.skins.size());
 
+		for (size_t i = 0; i < input.skins.size(); i++)
+		{
+			tinygltf::Skin glTFSkin = input.skins[i];
+
+			skins[i].name = glTFSkin.name;
+			//follow the tree structure,find the root node of skeleton by index
+			skins[i].skeletonRoot = nodeFromIndex(glTFSkin.skeleton);
+
+			//join nodes
+			for (int jointIndex : glTFSkin.joints)
+			{
+				Node* node = nodeFromIndex(jointIndex);
+				if (node)
+				{
+					skins[i].joints.push_back(node);
+				}
+			}
+			//get the inverse bind matrices
+			if (glTFSkin.inverseBindMatrices > -1)
+			{
+				const tinygltf::Accessor& accessor = input.accessors[glTFSkin.inverseBindMatrices];
+				const tinygltf::BufferView& bufferview = input.bufferViews[accessor.bufferView];
+				const tinygltf::Buffer& buffer = input.buffers[bufferview.buffer];
+				skins[i].inverseBindMatrices.resize(accessor.count);
+				memcpy(skins[i].inverseBindMatrices.data(), &buffer.data[accessor.byteOffset + bufferview.byteOffset], accessor.count * sizeof(glm::mat4));
+
+				//create a host visible shader buffer to store inverse bind matrices for this skin
+				VK_CHECK_RESULT(vulkanDevice->createBuffer(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+					&skins[i].ssbo, sizeof(glm::mat4) * skins[i].inverseBindMatrices.size(),
+					skins[i].inverseBindMatrices.data()));
+				VK_CHECK_RESULT(skins[i].ssbo.map());
+			}
+		}
+		
+		
 	}
 
 	/*
