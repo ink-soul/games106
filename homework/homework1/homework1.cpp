@@ -333,6 +333,7 @@ VulkanglTFModel::~VulkanglTFModel()
 					for (size_t v = 0; v < vertexCount; v++)
 					{
 						Vertex vert{};
+						vert.pos = glm::vec4(glm::make_vec3(&positionBuffer[v * 3]), 1.0f);
 
 					}
 				}
