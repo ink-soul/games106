@@ -211,7 +211,11 @@ VulkanglTFModel::~VulkanglTFModel()
 					}
 					case TINYGLTF_TYPE_VEC4:
 					{
-
+						const glm::vec4* buf = static_cast<const glm::vec4*>(dataptr);
+						for (size_t index = 0; index < accessor.count; index++)
+						{
+							dstSampler.outputsVec4.push_back(glm::vec4(buf[index]));
+						}
 					}
 					default:
 					{
@@ -221,7 +225,19 @@ VulkanglTFModel::~VulkanglTFModel()
 					}
 				}
 			}
+			animations[i].channels.resize(glTFAnimation.channels.size());
+			for (size_t j = 0; j < glTFAnimation.channels.size(); j++);
+			{
+				tinygltf::AnimationChannel glTFChannel = glTFAnimation.channels[j];
+				AnimationChannel& dstChannel = animations[i].channels[j];
+				dstChannel.path = glTFChannel.target_path;
+				dstChannel.samplerIndex = glTFChannel.sampler;
+				dstChannel.node = nodeFromIndex(glTFChannel.target_node);
+			}
+
 		}
+
+		
 	}
 	//node loader
 	void VulkanglTFModel::loadNode(const tinygltf::Node& inputNode, const tinygltf::Model& input, VulkanglTFModel::Node* parent, uint32_t nodeIndex, std::vector<uint32_t>& indexBuffer, std::vector<VulkanglTFModel::Vertex>& vertexBuffer)
