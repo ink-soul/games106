@@ -146,6 +146,89 @@ VulkanglTFModel::~VulkanglTFModel()
 		}
 		return nodeFound;
 	}
+	
+	//animation loader
+	void VulkanglTFModel::loadAnimations(tinygltf::Model& input)
+	{
+		animations.resize(input.animations.size());
+
+		for (size_t i = 0; i < input.animations.size(); i++)
+		{
+			tinygltf::Animation glTFAnimation = input.animations[i];
+			input.animations[i].name = glTFAnimation.name;
+
+			animations[i].samplers.resize(glTFAnimation.samplers.size());
+			for (size_t j = 0; j < glTFAnimation.samplers.size(); j++)
+			{
+				tinygltf::AnimationSampler glTFSampler = glTFAnimation.samplers[j];
+				AnimationSampler& dstSampler = animations[i].samplers[j];
+				dstSampler.interpolation = glTFSampler.interpolation;
+				//sample keyframes to input
+				{
+					const tinygltf::Accessor& accessor = input.accessors[glTFSampler.input];
+					const tinygltf::BufferView& bufferView = input.bufferViews[accessor.bufferView];
+					const tinygltf::Buffer& buffer = input.buffers[bufferView.buffer];
+					//data pointer
+					const void* dataptr = &buffer.data[accessor.byteOffset + bufferView.byteOffset];
+					const float* buf = static_cast<const float*>(dataptr);
+
+					for (size_t index = 0; index < accessor.count; index++)
+					{
+						dstSampler.inputs.push_back(buf[index]);
+					}
+					//switch value for correct start and end time
+					for (auto input : animations[i].samplers[j].inputs)
+					{
+						if (input < animations[i].start)
+						{
+							animations[i].start = input;
+						};
+						if (input < animations[i].end)
+						{
+							animations[i].end = input;
+						}
+					}
+				}
+				//identify accessor type for keyframes to output translate/rotate/scale values
+				{
+					const tinygltf::Accessor& accessor = input.accessors[glTFSampler.input];
+					const tinygltf::BufferView& bufferView = input.bufferViews[accessor.bufferView];
+					const tinygltf::Buffer& buffer = input.buffers[bufferView.buffer];
+					//data pointer
+					const void* dataptr = &buffer.data[accessor.byteOffset + bufferView.byteOffset];
+					const float* buf = static_cast<const float*>(dataptr);
+					switch (accessor.type)
+					{
+					case TINYGLTF_TYPE_VEC3:
+					{
+						const glm::vec3* buf = static_cast<const glm::vec3*> (dataptr);
+						for (size_t index = 0; index < accessor.count; index++)
+						{
+							dstSampler.outputsVec4.push_back(glm::vec4(buf[index], 0.0f));
+
+						}
+						break;
+					}
+					case TINYGLTF_TYPE_VEC4:
+					{
+
+					}
+					default:
+					{
+						std::cout << "unknown type in accessor" << std::endl;
+					}
+					break;
+					}
+				}
+			}
+		}
+	}
+	//node loader
+	void VulkanglTFModel::loadNode(const tinygltf::Node& inputNode, const tinygltf::Model& input, VulkanglTFModel::Node* parent, uint32_t nodeIndex, std::vector<uint32_t>& indexBuffer, std::vector<VulkanglTFModel::Vertex>& vertexBuffer)
+	{
+
+	}
+
 	// load skins from glTF model
 	void VulkanglTFModel::loadSkins(tinygltf::Model& input)
 	{
