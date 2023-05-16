@@ -196,7 +196,7 @@ VulkanglTFModel::~VulkanglTFModel()
 					const tinygltf::Buffer& buffer = input.buffers[bufferView.buffer];
 					//data pointer
 					const void* dataptr = &buffer.data[accessor.byteOffset + bufferView.byteOffset];
-					const float* buf = static_cast<const float*>(dataptr);
+					
 					switch (accessor.type)
 					{
 					case TINYGLTF_TYPE_VEC3:
@@ -214,8 +214,9 @@ VulkanglTFModel::~VulkanglTFModel()
 						const glm::vec4* buf = static_cast<const glm::vec4*>(dataptr);
 						for (size_t index = 0; index < accessor.count; index++)
 						{
-							dstSampler.outputsVec4.push_back(glm::vec4(buf[index]));
+							dstSampler.outputsVec4.push_back(buf[index]);
 						}
+						break;
 					}
 					default:
 					{
@@ -291,7 +292,7 @@ VulkanglTFModel::~VulkanglTFModel()
 				const float* texcoordsBuffer = nullptr;
 				const float* jointWeightsBuffer = nullptr;
 				const uint16_t * jointIndicesBuffer = nullptr;
-				uint32_t vertexCount = 0;
+				size_t vertexCount = 0;
 				bool hasSkin = false;
 				//get buffer by index in primmitive.attributes
 				{
@@ -305,28 +306,28 @@ VulkanglTFModel::~VulkanglTFModel()
 					if (glTFPrimmitive.attributes.find("NORMAL") != glTFPrimmitive.attributes.end())
 					{
 						const tinygltf::Accessor& accessor = input.accessors[glTFPrimmitive.attributes.find("NORMAL")->second];
-						const tinygltf::BufferView view = input.bufferViews[accessor.bufferView];
+						const tinygltf::BufferView &view = input.bufferViews[accessor.bufferView];
 						normalsBuffer = reinterpret_cast<const float*> (&(input.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
 
 					}
 					if (glTFPrimmitive.attributes.find("TEXCOORD_0") != glTFPrimmitive.attributes.end())
 					{
 						const tinygltf::Accessor& accessor = input.accessors[glTFPrimmitive.attributes.find("TEXCOORD_0")->second];
-						const tinygltf::BufferView view = input.bufferViews[accessor.bufferView];
+						const tinygltf::BufferView &view = input.bufferViews[accessor.bufferView];
 						texcoordsBuffer = reinterpret_cast<const float*> (&(input.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
 
 					}
 					if (glTFPrimmitive.attributes.find("JOINT_0") != glTFPrimmitive.attributes.end())
 					{
 						const tinygltf::Accessor& accessor = input.accessors[glTFPrimmitive.attributes.find("JOINT_0")->second];
-						const tinygltf::BufferView view = input.bufferViews[accessor.bufferView];
+						const tinygltf::BufferView &view = input.bufferViews[accessor.bufferView];
 						jointIndicesBuffer = reinterpret_cast<const uint16_t*> (&(input.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
 
 					}
 					if (glTFPrimmitive.attributes.find("WEIGHTS_0") != glTFPrimmitive.attributes.end())
 					{
 						const tinygltf::Accessor& accessor = input.accessors[glTFPrimmitive.attributes.find("WEIGHTS_0")->second];
-						const tinygltf::BufferView view = input.bufferViews[accessor.bufferView];
+						const tinygltf::BufferView &view = input.bufferViews[accessor.bufferView];
 						jointWeightsBuffer = reinterpret_cast<const float*> (&(input.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
 
 					}
@@ -340,7 +341,7 @@ VulkanglTFModel::~VulkanglTFModel()
 						vert.color = glm::vec3(1.0f);
 						vert.jointIndices = hasSkin ? glm::vec4(glm::make_vec4(&jointIndicesBuffer[v * 4])) : glm::vec4(0.0f);
 						vert.jointWeights = hasSkin ? glm::make_vec4(&jointWeightsBuffer[v * 4]) : glm::vec4(0.0f);
-
+						vertexBuffer.push_back(vert);
 					}
 				}
 				{
