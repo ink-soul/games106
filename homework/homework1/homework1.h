@@ -177,7 +177,7 @@ public:
 	glm::mat4 getNodeMatrix(VulkanglTFModel::Node* node);
 	void      updateJoints(VulkanglTFModel::Node* node);
 	void      updateAnimation(float deltaTime);
-	void drawNode(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, VulkanglTFModel::Node* node);
+	void drawNode(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, VulkanglTFModel::Node node);
 	void      draw(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout);
 };
 

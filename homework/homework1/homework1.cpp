@@ -442,37 +442,137 @@ VulkanglTFModel::~VulkanglTFModel()
 		
 		
 	}
+	/*
+		vertext skinning functions
+	*/
+	glm::mat4 VulkanglTFModel::getNodeMatrix(VulkanglTFModel::Node* node)
+	{
+		glm::mat4 nodeMatrix = node->VulkanglTFModel::Node::getLocalMatrix();
+		VulkanglTFModel::Node* currentParent = node->parent;
+		while (currentParent)
+		{
+			nodeMatrix = currentParent->getLocalMatrix() * nodeMatrix;
+			currentParent = currentParent->parent;
+		}
+		return nodeMatrix;
+	}
 
+	void VulkanglTFModel::updateJoints(VulkanglTFModel::Node* node)
+	{
+		if (node->skin > -1)
+		{
+			glm::mat4 inversTransform = glm::inverse(getNodeMatrix(node));
+			Skin skin = skins[node->skin];
+			size_t numJoints = (uint32_t)skin.joints.size();
+			std::vector<glm::mat4> jointMatrices(numJoints);
+			for (size_t i = 0; i < numJoints; i++)
+			{
+				jointMatrices[i] = getNodeMatrix(skin.joints[i]) * skin.inverseBindMatrices[i];
+				jointMatrices[i] = inversTransform * jointMatrices[i];
+			}
+			skin.ssbo.copyTo(jointMatrices.data(), jointMatrices.size() * sizeof(glm::mat4));
+		}
+		for (auto& child : node->children)
+		{
+			updateJoints(child);
+		}
+	}
+
+	void VulkanglTFModel::updateAnimation(float deltaTime)
+	{
+		if (activeAnimation > static_cast<uint32_t>(animations.size())-1)
+		{
+			std::cout << "no animation with index" << activeAnimation << std::endl;
+			return;
+		}
+		Animation& animation = animations[activeAnimation];
+		animation.currentTime += deltaTime;
+		if (animation.currentTime > animation.end)
+		{
+			animation.currentTime -= animation.end;
+		}
+		for (auto& channel : animation.channels)
+		{
+			
+			AnimationSampler& sampler = animation.samplers[channel.samplerIndex];
+			for (size_t i = 0; i < sampler.inputs.size() - 1; i++)
+			{
+				if (sampler.interpolation != "LINEAR")
+				{
+					std::cout << "sample only supports linear interpolaton" << std::endl;
+					continue;
+				}
+				if ((animation.currentTime >= sampler.inputs[i]) && (animation.currentTime <= sampler.inputs[i + 1]))
+				{
+					float a = (animation.currentTime - sampler.inputs[i]) / (sampler.inputs[i + 1] - sampler.inputs[i]);
+					if (channel.path == "translation")
+					{
+						channel.node->translation = glm::mix(sampler.outputsVec4[i], sampler.outputsVec4[i + 1], a);
+					}
+					if (channel.path == "rotation")
+					{
+						//quaternion
+						glm::quat q1;
+						q1.x = sampler.outputsVec4[i].x;
+						q1.y = sampler.outputsVec4[i].y;
+						q1.z = sampler.outputsVec4[i].z;
+						q1.w = sampler.outputsVec4[i].w;
+
+						glm::quat q2;
+						q2.x = sampler.outputsVec4[i].x;
+						q2.y = sampler.outputsVec4[i].y;
+						q2.z = sampler.outputsVec4[i].z;
+						q2.w = sampler.outputsVec4[i].w;
+
+						channel.node->rotation = glm::normalize(glm::slerp(q1, q2, a));
+
+					}
+					if (channel.path == "scale")
+					{
+						channel.node->scale = glm::mix(sampler.outputsVec4[i], sampler.outputsVec4[i + 1], a);
+					}
+				}
+			}
+		}
+		for (auto& node : nodes)
+		{
+			updateJoints(node);
+		}
+
+	}
 	/*
 		glTF rendering functions
 	*/
 
 	// Draw a single node including child nodes (if present)
-	void VulkanglTFModel::drawNode(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, VulkanglTFModel::Node* node)
+	void VulkanglTFModel::drawNode(VkCommandBuffer commandBuffer, VkPipelineLayout pipelineLayout, VulkanglTFModel::Node node)
 	{
-		if (node->mesh.primitives.size() > 0) {
+		if (node.mesh.primitives.size() > 0) {
 			// Pass the node's matrix via push constants
 			// Traverse the node hierarchy to the top-most parent to get the final matrix of the current node
-			glm::mat4 nodeMatrix = node->matrix;
-			VulkanglTFModel::Node* currentParent = node->parent;
+			glm::mat4 nodeMatrix = node.matrix;
+			VulkanglTFModel::Node* currentParent = node.parent;
 			while (currentParent) {
 				nodeMatrix = currentParent->matrix * nodeMatrix;
 				currentParent = currentParent->parent;
 			}
 			// Pass the final matrix to the vertex shader using push constants
 			vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &nodeMatrix);
-			for (VulkanglTFModel::Primitive& primitive : node->mesh.primitives) {
-				if (primitive.indexCount > 0) {
+			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &skins[node.skin].descriptorSet, 0, nullptr);
+
+			for (VulkanglTFModel::Primitive& primitive : node.mesh.primitives) {
+				if (primitive.indexCount > 0) 
+				{
 					// Get the texture index for this primitive
 					VulkanglTFModel::Texture texture = textures[materials[primitive.materialIndex].baseColorTextureIndex];
 					// Bind the descriptor for the current primitive's texture
-					vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &images[texture.imageIndex].descriptorSet, 0, nullptr);
+					vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 2, 1, &images[texture.imageIndex].descriptorSet, 0, nullptr);
 					vkCmdDrawIndexed(commandBuffer, primitive.indexCount, 1, primitive.firstIndex, 0, 0);
 				}
 			}
 		}
-		for (auto& child : node->children) {
-			drawNode(commandBuffer, pipelineLayout, child);
+		for (auto& child : node.children) {
+			drawNode(commandBuffer, pipelineLayout, *child);
 		}
 	}
 
@@ -485,7 +585,7 @@ VulkanglTFModel::~VulkanglTFModel()
 		vkCmdBindIndexBuffer(commandBuffer, indices.buffer, 0, VK_INDEX_TYPE_UINT32);
 		// Render all nodes at top-level
 		for (auto& node : nodes) {
-			drawNode(commandBuffer, pipelineLayout, node);
+			drawNode(commandBuffer, pipelineLayout, *node);
 		}
 	}
 
