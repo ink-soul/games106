@@ -877,6 +877,9 @@ void VulkanExample::getEnabledFeatures()
 			vks::initializers::vertexInputAttributeDescription(0, 1, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VulkanglTFModel::Vertex, normal)),// Location 1: Normal
 			vks::initializers::vertexInputAttributeDescription(0, 2, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VulkanglTFModel::Vertex, uv)),	// Location 2: Texture coordinates
 			vks::initializers::vertexInputAttributeDescription(0, 3, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VulkanglTFModel::Vertex, color)),	// Location 3: Color
+			vks::initializers::vertexInputAttributeDescription(0, 4, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VulkanglTFModel::Vertex,jointIndices)), // Location 4 : jointIndices
+			vks::initializers::vertexInputAttributeDescription(0, 5, VK_FORMAT_R32G32B32_SFLOAT, offsetof(VulkanglTFModel::Vertex,jointWeights)), //Location 5 : jointWeights
+
 		};
 		VkPipelineVertexInputStateCreateInfo vertexInputStateCI = vks::initializers::pipelineVertexInputStateCreateInfo();
 		vertexInputStateCI.vertexBindingDescriptionCount = static_cast<uint32_t>(vertexInputBindings.size());
@@ -952,6 +955,10 @@ void VulkanExample::getEnabledFeatures()
 		renderFrame();
 		if (camera.updated) {
 			updateUniformBuffers();
+		}
+		if (!paused)
+		{
+			glTFModel.updateAnimation(frameTimer);
 		}
 	}
 

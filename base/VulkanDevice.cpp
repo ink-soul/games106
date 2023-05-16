@@ -344,7 +344,7 @@ namespace vks
 			allocFlagsInfo.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT_KHR;
 			memAlloc.pNext = &allocFlagsInfo;
 		}
-		VK_CHECK_RESULT(vkAllocateMemory(logicalDevice, &memAlloc, nullptr, memory));
+		vkAllocateMemory(logicalDevice, &memAlloc, nullptr, memory);
 			
 		// If a pointer to the buffer data has been passed, map the buffer and copy over the data
 		if (data != nullptr)
