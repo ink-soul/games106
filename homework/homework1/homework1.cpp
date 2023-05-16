@@ -689,7 +689,8 @@ void VulkanExample::getEnabledFeatures()
 		std::vector<uint32_t> indexBuffer;
 		std::vector<VulkanglTFModel::Vertex> vertexBuffer;
 
-		if (fileLoaded) {
+		if (fileLoaded) 
+		{
 			glTFModel.loadImages(glTFInput);
 			glTFModel.loadMaterials(glTFInput);
 			glTFModel.loadTextures(glTFInput);
@@ -697,6 +698,13 @@ void VulkanExample::getEnabledFeatures()
 			for (size_t i = 0; i < scene.nodes.size(); i++) {
 				const tinygltf::Node node = glTFInput.nodes[scene.nodes[i]];
 				glTFModel.loadNode(node, glTFInput, nullptr,scene.nodes[i], indexBuffer, vertexBuffer);
+			}
+			glTFModel.loadSkins(glTFInput);
+			glTFModel.loadAnimations(glTFInput);
+			// update joint in nodes
+			for (auto node : glTFModel.nodes)
+			{
+				glTFModel.updateJoints(node);
 			}
 		}
 		else {
