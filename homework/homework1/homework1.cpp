@@ -285,8 +285,9 @@ VulkanglTFModel::~VulkanglTFModel()
 				const tinygltf::Primitive& glTFPrimmitive = mesh.primitives[i];
 				uint32_t firstIndex = static_cast<uint32_t>(indexBuffer.size());
 				uint32_t vertexStart = static_cast<uint32_t>(vertexBuffer.size());
+				uint32_t indexCount = 0;
 				const float* positionBuffer = nullptr;
-				const float* normalBuffer = nullptr;
+				const float* normalsBuffer = nullptr;
 				const float* texcoordsBuffer = nullptr;
 				const float* jointWeightsBuffer = nullptr;
 				const uint16_t * jointIndicesBuffer = nullptr;
@@ -305,7 +306,7 @@ VulkanglTFModel::~VulkanglTFModel()
 					{
 						const tinygltf::Accessor& accessor = input.accessors[glTFPrimmitive.attributes.find("NORMAL")->second];
 						const tinygltf::BufferView view = input.bufferViews[accessor.bufferView];
-						normalBuffer = reinterpret_cast<const float*> (&(input.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
+						normalsBuffer = reinterpret_cast<const float*> (&(input.buffers[view.buffer].data[accessor.byteOffset + view.byteOffset]));
 
 					}
 					if (glTFPrimmitive.attributes.find("TEXCOORD_0") != glTFPrimmitive.attributes.end())
@@ -334,10 +335,69 @@ VulkanglTFModel::~VulkanglTFModel()
 					{
 						Vertex vert{};
 						vert.pos = glm::vec4(glm::make_vec3(&positionBuffer[v * 3]), 1.0f);
+						vert.uv = texcoordsBuffer ? glm::make_vec2(&texcoordsBuffer[v*2]):glm::vec4(0.0f);
+						vert.normal = glm::normalize(glm::vec3(normalsBuffer ? glm::make_vec3(&normalsBuffer[v * 3]) : glm::vec3(0.0f)));
+						vert.color = glm::vec3(1.0f);
+						vert.jointIndices = hasSkin ? glm::vec4(glm::make_vec4(&jointIndicesBuffer[v * 4])) : glm::vec4(0.0f);
+						vert.jointWeights = hasSkin ? glm::make_vec4(&jointWeightsBuffer[v * 4]) : glm::vec4(0.0f);
 
 					}
 				}
+				{
+					const tinygltf::Accessor& accessor = input.accessors[glTFPrimmitive.indices];
+					const tinygltf::BufferView& bufferview = input.bufferViews[accessor.bufferView];
+					const tinygltf::Buffer& buffer = input.buffers[bufferview.buffer];
+
+					indexCount += static_cast<uint32_t>(accessor.count);
+
+					switch (accessor.componentType)
+					{
+					case TINYGLTF_PARAMETER_TYPE_UNSIGNED_INT: {
+						const uint32_t* buf = reinterpret_cast<const uint32_t*>(&buffer.data[accessor.byteOffset + bufferview.byteOffset]);
+						for (size_t index = 0; index < accessor.count; index++)
+						{
+							indexBuffer.push_back(buf[index] + vertexStart);
+						}
+						break;
+
+					}
+					case TINYGLTF_PARAMETER_TYPE_UNSIGNED_SHORT:{
+						const uint16_t* buf = reinterpret_cast<const uint16_t*>(&buffer.data[accessor.byteOffset + bufferview.byteOffset]);
+						for (size_t index = 0; index < accessor.count; index++)
+						{
+							indexBuffer.push_back(buf[index] + vertexStart);
+						}
+						break;
+					}
+					case TINYGLTF_PARAMETER_TYPE_UNSIGNED_BYTE: {
+						const uint16_t* buf = reinterpret_cast<const uint16_t*>(&buffer.data[accessor.byteOffset + bufferview.byteOffset]);
+						for (size_t index = 0; index < accessor.count; index++)
+						{
+							indexBuffer.push_back(buf[index] + vertexStart);
+						}
+						break;
+					}
+					default:
+						std::cerr << "index component type" << accessor.componentType << "not supported" << std::endl;
+
+						return;
+					}
+				}
+				Primitive primitive{};
+				primitive.firstIndex = firstIndex;
+				primitive.indexCount = indexCount;
+				primitive.materialIndex = glTFPrimmitive.material;
+				node->mesh.primitives.push_back(primitive);
+				
 			}
+		}
+		if (parent)
+		{
+			parent->children.push_back(node);
+		}
+		else
+		{
+			nodes.push_back(node);
 		}
 	}
 
