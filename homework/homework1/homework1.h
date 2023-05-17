@@ -86,11 +86,6 @@ public:
 		glm::mat4 getLocalMatrix();
 		glm::mat4 matrix;
 
-		~Node() {
-			for (auto& child : children) {
-				delete child;
-			}
-		}
 	};
 
 	// A glTF material stores information in e.g. the texture that is attached to it and colors
