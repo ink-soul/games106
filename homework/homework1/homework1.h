@@ -82,7 +82,7 @@ public:
 		glm::vec3 translation{};
 		glm::vec3 scale{ 1.0f };
 		glm::quat rotation{};
-		int32_t             skin = -1;
+		int32_t   skin = -1;
 		glm::mat4 getLocalMatrix();
 		glm::mat4 matrix;
 
